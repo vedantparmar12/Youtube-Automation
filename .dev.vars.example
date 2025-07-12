@@ -1,0 +1,19 @@
+# Development Environment Variables
+# Copy this file to .dev.vars and fill in your actual values
+
+# YouTube API Configuration
+YOUTUBE_API_KEY=your_youtube_api_key_here
+
+# Notion API Configuration
+NOTION_API_KEY=your_notion_integration_token_here
+NOTION_DATABASE_ID=your_notion_database_id_here
+
+# GitHub OAuth (for authentication)
+GITHUB_CLIENT_ID=your_github_client_id_here
+GITHUB_CLIENT_SECRET=your_github_client_secret_here
+
+# Sentry Configuration (for error tracking)
+SENTRY_DSN=your_sentry_dsn_here
+
+# Environment
+ENVIRONMENT=development
