@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "codebase": {
+      "canRead": true,
+      "canWrite": true,
+      "canExecute": true
+    },
+    "commands": {
+      "canExecute": true
+    }
+  }
+}
