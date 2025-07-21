@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "prp-parser": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://prp-parser-mcp.vedantparmarsingh.workers.dev/mcp"
+      ],
+      "env": {}
+    }
+  }
+}
