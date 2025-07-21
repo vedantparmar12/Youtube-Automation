@@ -31,11 +31,8 @@ Before starting, ensure you have:
 
 ```bash
 # If you haven't already cloned the repository
-git clone https://github.com/coleam00/Context-Engineering-Intro.git
-cd Context-Engineering-Intro/use-cases/mcp-server
-
+git clone 
 # Or navigate to existing project
-cd /mnt/c/Users/vedan/Desktop/mcp-rag/context-engineering-intro-main/use-cases/mcp-server
 ```
 
 ### Step 2: Install Dependencies
