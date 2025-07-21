@@ -1,408 +1,469 @@
-# MCP Server Builder - Context Engineering Use Case
+# PRP Parser MCP Server - Implementation Guide
 
-This use case demonstrates how to use **Context Engineering** and the **PRP (Product Requirements Prompt) process** to build production-ready Model Context Protocol (MCP) servers. It provides a proven template and workflow for creating MCP servers with GitHub OAuth authentication, database integration, and Cloudflare Workers deployment.
+This guide provides step-by-step instructions to set up, test, and deploy the PRP Parser MCP Server that extracts PRPs from YouTube videos and syncs them to Notion.
 
-> A PRP is PRD + curated codebase intelligence + agent/runbook—the minimum viable packet an AI needs to plausibly ship production-ready code on the first pass.
+## Table of Contents
 
-## 🚀 Quick Start
+1. [Prerequisites](#prerequisites)
+2. [Environment Setup](#environment-setup)
+3. [Database Setup](#database-setup)
+4. [API Keys Configuration](#api-keys-configuration)
+5. [Local Development](#local-development)
+6. [Testing the Implementation](#testing-the-implementation)
+7. [Production Deployment](#production-deployment)
+8. [Troubleshooting](#troubleshooting)
 
-### Prerequisites
+## Prerequisites
 
-- Node.js and npm installed
+Before starting, ensure you have:
+
+- Node.js (v18 or higher) and npm installed
+- PostgreSQL database (local or cloud-hosted)
 - Cloudflare account (free tier works)
-- GitHub account for OAuth
-- PostgreSQL database (local or hosted)
+- GitHub account with OAuth app
+- Google Cloud account (for YouTube API)
+- Notion account with workspace access
+- Google AI account with Gemini API access
 
-### Step 1: Setup Your Project
+## Environment Setup
+
+### Step 1: Clone and Navigate to Project
 
 ```bash
-# Clone the context engineering repository
+# If you haven't already cloned the repository
 git clone https://github.com/coleam00/Context-Engineering-Intro.git
 cd Context-Engineering-Intro/use-cases/mcp-server
 
-# Copy template to your new project directory
-python copy_template.py my-mcp-server-project
+# Or navigate to existing project
+cd /mnt/c/Users/vedan/Desktop/mcp-rag/context-engineering-intro-main/use-cases/mcp-server
+```
 
-# Navigate to your new project
-cd my-mcp-server-project
+### Step 2: Install Dependencies
 
-# Install dependencies
+```bash
+# Install all npm packages
 npm install
 
-# Install Wrangler CLI globally
+# Install Wrangler CLI globally if not already installed
 npm install -g wrangler
 
-# Authenticate with Cloudflare
+# Verify Wrangler installation
+wrangler --version
+```
+
+### Step 3: Create Environment Variables File
+
+```bash
+# Copy the example environment file
+cp .dev.vars.example .dev.vars
+
+# Open .dev.vars in your editor and fill in all values
+```
+
+## Database Setup
+
+### Step 1: Create PostgreSQL Database
+
+```bash
+# If using local PostgreSQL
+psql -U postgres
+
+# Create database
+CREATE DATABASE prp_parser_db;
+
+# Exit psql
+\q
+```
+
+### Step 2: Run Database Migrations
+
+```bash
+# Connect to your database
+psql -U postgres -d prp_parser_db
+
+# Run the migration script
+\i migrations/001_create_prp_tables.sql
+
+# Verify tables were created
+\dt
+
+# You should see:
+# - parsed_prps
+# - prp_tasks
+# - prp_summaries (view)
+```
+
+### Step 3: Update Database URL in .dev.vars
+
+```bash
+# Edit .dev.vars and update DATABASE_URL
+DATABASE_URL=postgresql://username:password@localhost:5432/prp_parser_db
+```
+
+## API Keys Configuration
+
+### Step 1: GitHub OAuth Setup
+
+1. Go to GitHub Settings → Developer settings → OAuth Apps
+2. Click "New OAuth App"
+3. Fill in:
+   - Application name: `PRP Parser MCP`
+   - Homepage URL: `http://localhost:8793`
+   - Authorization callback URL: `http://localhost:8793/callback`
+4. Click "Register application"
+5. Copy Client ID and generate a Client Secret
+6. Add to `.dev.vars`:
+   ```
+   GITHUB_CLIENT_ID=your_client_id
+   GITHUB_CLIENT_SECRET=your_client_secret
+   ```
+
+### Step 2: YouTube API Key
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project or select existing
+3. Enable YouTube Data API v3:
+   - Go to APIs & Services → Library
+   - Search for "YouTube Data API v3"
+   - Click Enable
+4. Create credentials:
+   - Go to APIs & Services → Credentials
+   - Click "Create Credentials" → API Key
+   - Restrict key to YouTube Data API v3
+5. Add to `.dev.vars`:
+   ```
+   YOUTUBE_API_KEY=your_youtube_api_key
+   ```
+
+### Step 3: Notion Integration
+
+1. Go to [Notion Integrations](https://www.notion.so/my-integrations)
+2. Click "New integration"
+3. Fill in:
+   - Name: `PRP Parser`
+   - Associated workspace: Select your workspace
+   - Capabilities: Read, Update, Insert content
+4. Click Submit
+5. Copy the Integration Token
+6. Add to `.dev.vars`:
+   ```
+   NOTION_TOKEN=your_notion_integration_token
+   ```
+
+### Step 4: Create Notion Database
+
+1. Create a new Notion page
+2. Add a database with these properties:
+   - Name (Title)
+   - YouTube URL (URL)
+   - Video Title (Text)
+   - Channel (Text)
+   - Created By (Text)
+   - PRP ID (Text)
+   - Task Count (Number)
+   - Status (Select with options: Parsed, Updated)
+3. Share the database with your integration:
+   - Click "..." menu → Add connections
+   - Select your PRP Parser integration
+4. Copy the database ID from the URL:
+   ```
+   https://notion.so/workspace/1234567890abcdef?v=...
+   Database ID: 1234567890abcdef
+   ```
+
+### Step 5: Gemini API Key
+
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Create an API key
+3. Add to `.dev.vars`:
+   ```
+   GEMINI_API_KEY=your_gemini_api_key
+   GEMINI_MODEL=gemini-1.5-flash
+   ```
+
+### Step 6: Cookie Encryption Key
+
+Generate a secure key:
+
+```bash
+# Generate a random key
+openssl rand -base64 32
+
+# Add to .dev.vars
+COOKIE_ENCRYPTION_KEY=generated_key_here
+```
+
+## Local Development
+
+### Step 1: Login to Cloudflare
+
+```bash
 wrangler login
 ```
 
-**What copy_template.py does:**
-- Copies all template files except build artifacts (respects .gitignore)
-- Renames README.md to README_TEMPLATE.md (so you can create your own README)
-- Includes all source code, examples, tests, and configuration files
-- Preserves the complete context engineering setup
-
-## 🎯 What You'll Learn
-
-This use case teaches you how to:
-
-- **Use the PRP process** to systematically build complex MCP servers
-- **Leverage specialized context engineering** for MCP development
-- **Follow proven patterns** from a production-ready MCP server template
-- **Implement secure authentication** with GitHub OAuth and role-based access
-- **Deploy to Cloudflare Workers** with monitoring and error handling
-
-## 📋 How It Works - The PRP Process for MCP Servers
-
-> **Step 1 is the Quick Start setup above** - clone repo, copy template, install dependencies, setup Wrangler
-
-### Step 2: Define Your MCP Server
-
-Edit `PRPs/INITIAL.md` to describe your specific MCP server requirements:
-
-```markdown
-## FEATURE:
-We want to create a weather MCP server that provides real-time weather data
-with caching and rate limiting.
-
-## ADDITIONAL FEATURES:
-- Integration with OpenWeatherMap API
-- Redis caching for performance
-- Rate limiting per user
-- Historical weather data access
-- Location search and autocomplete
-
-## OTHER CONSIDERATIONS:
-- API key management for external services
-- Proper error handling for API failures
-- Coordinate validation for location queries
-```
-
-### Step 3: Generate Your PRP
-
-Use the specialized MCP PRP command to create a comprehensive implementation plan:
+### Step 2: Generate TypeScript Types
 
 ```bash
-/prp-mcp-create INITIAL.md
+# Generate types for the PRP configuration
+npx wrangler types --config wrangler-prp.jsonc
 ```
 
-**What this does:**
-- Reads your feature request
-- Researches the existing MCP codebase patterns
-- Studies authentication and database integration patterns
-- Creates a comprehensive PRP in `PRPs/your-server-name.md`
-- Includes all context, validation loops, and step-by-step tasks
-
-> It's important after your PRP is generated to validate everything! With the PRP framework, you are meant to be a part of the process to ensure the quality of all context! An execution is only as good as your PRP. Use /prp-mcp-create as a solid starting point.
-
-### Step 4: Execute Your PRP
-
-Use the specialized MCP execution command to build your server:
+### Step 3: Start Development Server
 
 ```bash
-/prp-mcp-execute PRPs/your-server-name.md
-```
-
-**What this does:**
-- Loads the complete PRP with all context
-- Creates a detailed implementation plan using TodoWrite
-- Implements each component following proven patterns
-- Runs comprehensive validation (TypeScript, tests, deployment)
-- Ensures your MCP server works end-to-end
-
-### Step 5: Configure Environment
-
-```bash
-# Create environment file
-cp .dev.vars.example .dev.vars
-
-# Edit .dev.vars with your credentials
-# - GitHub OAuth app credentials
-# - Database connection string
-# - Cookie encryption key
-```
-
-### Step 6: Test and Deploy
-
-```bash
-# Test locally
-wrangler dev --config <your wrangler config (.jsonc)>
-
-# Test with MCP Inspector
-npx @modelcontextprotocol/inspector@latest
-# Connect to: http://localhost:8792/mcp
-
-# Deploy to production
-wrangler deploy
-```
-
-## 🏗️ MCP-Specific Context Engineering
-
-This use case includes specialized context engineering components designed specifically for MCP server development:
-
-### Specialized Slash Commands
-
-Located in `.claude/commands/`:
-
-- **`/prp-mcp-create`** - Generates PRPs specifically for MCP servers
-- **`/prp-mcp-execute`** - Executes MCP PRPs with comprehensive validation
-
-These are specialized versions of the generic commands in the root `.claude/commands/`, but tailored for MCP development patterns.
-
-### Specialized PRP Template
-
-The template `PRPs/templates/prp_mcp_base.md` includes:
-
-- **MCP-specific patterns** for tool registration and authentication
-- **Cloudflare Workers configuration** for deployment
-- **GitHub OAuth integration** patterns
-- **Database security** and SQL injection protection
-- **Comprehensive validation loops** from TypeScript to production
-
-### AI Documentation
-
-The `PRPs/ai_docs/` folder contains:
-
-- **`mcp_patterns.md`** - Core MCP development patterns and security practices
-- **`claude_api_usage.md`** - How to integrate with Anthropic's API for LLM-powered features
-
-## 🔧 Template Architecture
-
-This template provides a complete, production-ready MCP server with:
-
-### Core Components
-
-```
-src/
-├── index.ts                 # Main authenticated MCP server
-├── index_sentry.ts         # Version with Sentry monitoring
-├── simple-math.ts          # Basic MCP example (no auth)
-├── github-handler.ts       # Complete GitHub OAuth implementation
-├── database.ts             # PostgreSQL with security patterns
-├── utils.ts                # OAuth helpers and utilities
-├── workers-oauth-utils.ts  # HMAC-signed cookie system
-└── tools/                  # Modular tool registration system
-    └── register-tools.ts   # Central tool registry
-```
-
-### Example Tools
-
-The `examples/` folder shows how to create MCP tools:
-
-- **`database-tools.ts`** - Example database tools with proper patterns
-- **`database-tools-sentry.ts`** - Same tools with Sentry monitoring
-
-### Key Features
-
-- **🔐 GitHub OAuth** - Complete authentication flow with role-based access
-- **🗄️ Database Integration** - PostgreSQL with connection pooling and security
-- **🛠️ Modular Tools** - Clean separation of concerns with central registration
-- **☁️ Cloudflare Workers** - Global edge deployment with Durable Objects
-- **📊 Monitoring** - Optional Sentry integration for production
-- **🧪 Testing** - Comprehensive validation from TypeScript to deployment
-
-## 🔍 Key Files to Understand
-
-To fully understand this use case, examine these files:
-
-### Context Engineering Components
-
-- **`PRPs/templates/prp_mcp_base.md`** - Specialized MCP PRP template
-- **`.claude/commands/prp-mcp-create.md`** - MCP-specific PRP generation
-- **`.claude/commands/prp-mcp-execute.md`** - MCP-specific execution
-
-### Implementation Patterns
-
-- **`src/index.ts`** - Complete MCP server with authentication
-- **`examples/database-tools.ts`** - Tool creation and registration patterns
-- **`src/tools/register-tools.ts`** - Modular tool registration system
-
-### Configuration & Deployment
-
-- **`wrangler.jsonc`** - Cloudflare Workers configuration
-- **`.dev.vars.example`** - Environment variable template
-- **`CLAUDE.md`** - Implementation guidelines and patterns
-
-## 📈 Success Metrics
-
-When you successfully use this process, you'll achieve:
-
-- **Fast Implementation** - Quickly have an MCP Server with minimal iterations
-- **Production Ready** - Secure authentication, monitoring, and error handling
-- **Scalable Architecture** - Clean separation of concerns and modular design
-- **Comprehensive Testing** - Validation from TypeScript to production deployment
-
-## 🤝 Contributing
-
-This use case demonstrates the power of Context Engineering for complex software development. To improve it:
-
-1. **Add new MCP server examples** to show different patterns
-2. **Enhance the PRP templates** with more comprehensive context
-3. **Improve validation loops** for better error detection
-4. **Document edge cases** and common pitfalls
-
-The goal is to make MCP server development predictable and successful through comprehensive context engineering.
-
----
-
-**Ready to build your MCP server?** Follow the complete process above: setup your project with the copy template, configure your environment, define your requirements in `PRPs/INITIAL.md`, then generate and execute your PRP to build your production-ready MCP server.
-
----
-
-## 📹 PRP Parser MCP Server
-
-The PRP Parser MCP Server is a specialized implementation that extracts Product Requirements Prompts (PRPs) from YouTube videos, parses them using AI, and syncs them to Notion databases.
-
-### Features
-
-- **YouTube Integration**: Extract video metadata and transcripts
-- **AI-Powered Parsing**: Use Anthropic Claude to parse PRPs from video content
-- **Notion Sync**: Automatically create and update Notion pages with parsed PRPs
-- **Task Management**: Extract and track implementation tasks from PRPs
-- **Database Storage**: PostgreSQL storage for all parsed PRPs and tasks
-
-### Setup Instructions
-
-#### 1. Environment Configuration
-
-Update your `.dev.vars` file with the required API keys:
-
-```bash
-# Existing OAuth and database configuration
-GITHUB_CLIENT_ID=<your github client id>
-GITHUB_CLIENT_SECRET=<your github client secret>
-COOKIE_ENCRYPTION_KEY=<your cookie encryption key>
-DATABASE_URL=postgresql://username:password@localhost:5432/database_name
-
-# YouTube API configuration
-YOUTUBE_API_KEY=<your YouTube Data API v3 key>
-
-# Notion configuration
-NOTION_TOKEN=<your Notion integration token>
-
-# Anthropic configuration
-ANTHROPIC_API_KEY=<your Anthropic API key>
-ANTHROPIC_MODEL=claude-3-sonnet-20240229  # Optional, defaults to this model
-```
-
-#### 2. Database Setup
-
-Run the migration to create PRP-specific tables:
-
-```sql
--- Run migrations/001_create_prp_tables.sql in your PostgreSQL database
--- This creates tables for parsed_prps, prp_tasks, and supporting views
-```
-
-#### 3. API Keys Setup
-
-**YouTube API Key:**
-1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
-2. Create a new project or select existing
-3. Enable YouTube Data API v3
-4. Create credentials → API Key
-5. Restrict the key to YouTube Data API v3
-
-**Notion Integration:**
-1. Go to [Notion Integrations](https://www.notion.so/my-integrations)
-2. Create a new integration
-3. Copy the integration token
-4. Share your Notion database with the integration
-
-**Anthropic API Key:**
-1. Sign up at [Anthropic](https://www.anthropic.com/)
-2. Get your API key from the dashboard
-3. Choose your preferred Claude model
-
-#### 4. Running the PRP Parser
-
-```bash
-# Start the PRP Parser MCP server locally
+# Start the PRP Parser MCP server
 npm run dev:prp
 
-# The server will be available at http://localhost:8793
-
-# Deploy to production
-npm run deploy:prp
+# Server will be available at http://localhost:8793
 ```
 
-### Available Tools
+### Step 4: Test OAuth Flow
 
-1. **parseYoutubePRP** - Extract and parse a PRP from a YouTube URL
-   - Fetches video metadata and transcript
-   - Uses AI to parse structured PRP content
-   - Stores in database with task extraction
-   - Optional auto-sync to Notion
+1. Open browser to `http://localhost:8793/authorize`
+2. You should see GitHub OAuth prompt
+3. Authorize the application
+4. You should be redirected back successfully
 
-2. **syncToNotion** - Sync a parsed PRP to Notion (privileged users only)
-   - Creates formatted Notion pages
-   - Updates existing pages if specified
-   - Tracks sync status in database
+## Testing the Implementation
 
-3. **listParsedPRPs** - List all parsed PRPs with filtering
-   - Filter by creator, sync status
-   - Pagination support
-   - Shows task completion stats
+### Step 1: Test with MCP Inspector
 
-4. **getPRPDetails** - Get detailed information about a specific PRP
-   - Full PRP content and metadata
-   - Associated tasks with status
-   - Notion sync information
+```bash
+# Install MCP Inspector
+npm install -g @modelcontextprotocol/inspector
 
-5. **extractTasks** - Extract additional tasks from a PRP using AI (privileged users only)
-   - Generate more implementation tasks
-   - AI-powered task extraction
-   - Automatic database storage
+# In a new terminal, run the inspector
+npx @modelcontextprotocol/inspector
 
-6. **updateTaskStatus** - Update task completion status (privileged users only)
-   - Track task progress
-   - Mark tasks as completed/blocked
-   - Audit trail with user tracking
+# Connect to your local server
+# URL: http://localhost:8793/mcp
+```
 
-### Claude Desktop Configuration
+### Step 2: Test parseYoutubePRP Tool
 
-To use the PRP Parser with Claude Desktop:
+In MCP Inspector, test the main tool:
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "parseYoutubePRP",
+    "arguments": {
+      "youtube_url": "https://www.youtube.com/watch?v=YOUR_VIDEO_ID",
+      "notion_database_id": "your_notion_database_id",
+      "auto_sync": true
+    }
+  }
+}
+```
+
+Expected response:
+- PRP should be parsed and stored in database
+- If auto_sync is true, Notion page should be created
+- Response includes prp_id and task count
+
+### Step 3: Test Other Tools
+
+Test listing PRPs:
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "listParsedPRPs",
+    "arguments": {
+      "limit": 10
+    }
+  }
+}
+```
+
+Test getting PRP details:
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "getPRPDetails",
+    "arguments": {
+      "prp_id": "uuid-from-previous-step",
+      "include_tasks": true
+    }
+  }
+}
+```
+
+### Step 4: Verify Database
+
+```bash
+# Check parsed PRPs
+psql -U postgres -d prp_parser_db -c "SELECT id, video_title, created_at FROM parsed_prps;"
+
+# Check tasks
+psql -U postgres -d prp_parser_db -c "SELECT prp_id, title, status FROM prp_tasks;"
+
+# Check summary view
+psql -U postgres -d prp_parser_db -c "SELECT * FROM prp_summaries;"
+```
+
+### Step 5: Verify Notion Integration
+
+1. Go to your Notion database
+2. Check if new pages were created
+3. Verify page content matches parsed PRP
+
+## Production Deployment
+
+### Step 1: Set Production Secrets
+
+```bash
+# Set all required secrets for production
+wrangler secret put DATABASE_URL --config wrangler-prp.jsonc
+wrangler secret put GITHUB_CLIENT_ID --config wrangler-prp.jsonc
+wrangler secret put GITHUB_CLIENT_SECRET --config wrangler-prp.jsonc
+wrangler secret put COOKIE_ENCRYPTION_KEY --config wrangler-prp.jsonc
+wrangler secret put YOUTUBE_API_KEY --config wrangler-prp.jsonc
+wrangler secret put NOTION_TOKEN --config wrangler-prp.jsonc
+wrangler secret put GEMINI_API_KEY --config wrangler-prp.jsonc
+wrangler secret put GEMINI_MODEL --config wrangler-prp.jsonc
+
+# Optional: Sentry for monitoring
+wrangler secret put SENTRY_DSN --config wrangler-prp.jsonc
+```
+
+### Step 2: Update GitHub OAuth URLs
+
+1. Go to your GitHub OAuth App settings
+2. Update URLs for production:
+   - Homepage URL: `https://prp-parser-mcp.YOUR-SUBDOMAIN.workers.dev`
+   - Callback URL: `https://prp-parser-mcp.YOUR-SUBDOMAIN.workers.dev/callback`
+
+### Step 3: Deploy to Cloudflare Workers
+
+```bash
+# Deploy the PRP Parser
+npm run deploy:prp
+
+# Note the deployed URL
+# Example: https://prp-parser-mcp.YOUR-SUBDOMAIN.workers.dev
+```
+
+### Step 4: Test Production Deployment
+
+1. Visit `https://prp-parser-mcp.YOUR-SUBDOMAIN.workers.dev/authorize`
+2. Complete OAuth flow
+3. Test with production MCP endpoint
+
+### Step 5: Configure Claude Desktop
+
+Update Claude Desktop config:
 
 ```json
 {
   "mcpServers": {
     "prp-parser": {
       "command": "npx",
-      "args": ["mcp-remote", "http://localhost:8793/mcp"],
+      "args": [
+        "mcp-remote",
+        "https://prp-parser-mcp.YOUR-SUBDOMAIN.workers.dev/mcp"
+      ],
       "env": {}
     }
   }
 }
 ```
 
-### Example Usage
+## Troubleshooting
 
-```typescript
-// Parse a YouTube video containing a PRP
-const result = await parseYoutubePRP({
-  youtube_url: "https://youtube.com/watch?v=VIDEO_ID",
-  notion_database_id: "your-notion-database-id", // optional
-  auto_sync: true // automatically sync to Notion
-});
+### Common Issues
 
-// List all parsed PRPs
-const prps = await listParsedPRPs({
-  created_by: "username",
-  sync_status: "synced",
-  limit: 20
-});
+#### 1. Database Connection Errors
 
-// Get detailed PRP information
-const details = await getPRPDetails({
-  prp_id: "uuid-of-prp",
-  include_tasks: true
-});
+```bash
+# Test database connection
+psql DATABASE_URL
+
+# Check if tables exist
+\dt
+
+# Re-run migrations if needed
 ```
 
-### Security Notes
+#### 2. OAuth Errors
 
-- GitHub OAuth required for all operations
-- Write operations (sync, extract, update) restricted to allowed users
-- API keys stored as environment variables/secrets
-- SQL injection protection on all database queries
-- Error messages sanitized to prevent information leakage
+- Verify GitHub OAuth app URLs match your environment
+- Check GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are correct
+- Ensure COOKIE_ENCRYPTION_KEY is set
+
+#### 3. YouTube API Errors
+
+- Check API quota in Google Cloud Console
+- Verify API key is restricted to YouTube Data API v3
+- Test with a public YouTube video
+
+#### 4. Notion Sync Failures
+
+- Verify integration has access to the database
+- Check database ID is correct (no hyphens)
+- Ensure all required properties exist in Notion database
+
+#### 5. Gemini API Errors
+
+- Check API key is valid
+- Verify you have sufficient credits
+- Try with a different model if needed
+
+### Debug Commands
+
+```bash
+# Check Wrangler logs
+wrangler tail --config wrangler-prp.jsonc
+
+# Test specific environment variables
+echo $DATABASE_URL | head -c 20
+
+# Verify TypeScript compilation
+npm run type-check
+
+# Check for syntax errors
+npx tsc --noEmit
+```
+
+### Getting Help
+
+If you encounter issues:
+
+1. Check the logs in Cloudflare dashboard
+2. Review error messages in MCP Inspector
+3. Verify all environment variables are set
+4. Check database connectivity
+5. Ensure all API services are accessible
+
+## Verification Checklist
+
+- [ ] All dependencies installed
+- [ ] Environment variables configured in .dev.vars
+- [ ] Database created and migrations run
+- [ ] GitHub OAuth app configured
+- [ ] YouTube API enabled and key created
+- [ ] Notion integration created and shared with database
+- [ ] Gemini API key obtained
+- [ ] Local server starts without errors
+- [ ] OAuth flow completes successfully
+- [ ] parseYoutubePRP tool works
+- [ ] Data appears in PostgreSQL database
+- [ ] Notion pages are created when syncing
+- [ ] Production deployment successful
+- [ ] Production OAuth URLs updated
+
+## Next Steps
+
+Once everything is working:
+
+1. Add more YouTube videos to build your PRP library
+2. Customize the Notion database properties
+3. Create automated workflows with the extracted tasks
+4. Monitor usage and errors with Sentry
+5. Add custom PRP parsing rules for specific video formats
+
+---
+
+**Support**: If you need help, check the main README.md or create an issue in the repository.
