@@ -178,7 +178,7 @@ The system is deployed as a Cloudflare Worker, providing:
 
 ```bash
 # If you haven't already cloned the repository
-git clone 
+git clone https://github.com/vedantparmar12/Youtube-Automation.git
 # Or navigate to existing project
 ```
 
